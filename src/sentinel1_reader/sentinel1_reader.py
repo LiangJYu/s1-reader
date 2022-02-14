@@ -145,7 +145,7 @@ def get_burst_orbit(sensing_start, sensing_stop, osv_list: ET.Element):
     fmt = "UTC=%Y-%m-%dT%H:%M:%S.%f"
     orbit_sv = []
     # add start & end padding to ensure sufficient number of orbit points
-    pad = datetime.timedelta(seconds=60)
+    pad = datetime.timedelta(seconds=600)
     for osv in osv_list:
         t_orbit = datetime.datetime.strptime(osv[1].text, fmt)
 
@@ -346,12 +346,6 @@ def burst_from_xml(annotation_path: str, orbit_path: str, tiff_path: str,
                                         azimuth_time_interval)
         doppler = Doppler(poly1d, lut2d)
 
-        # get orbit from state vector list/element tree
-        sensing_duration = datetime.timedelta(
-            seconds=n_samples * azimuth_time_interval)
-        orbit = get_burst_orbit(sensing_start, sensing_start + sensing_duration,
-                                osv_list)
-
         # determine burst offset and dimensions
         # TODO move to own method
         first_valid_samples = [int(val) for val in burst_list_element.find('firstValidSample').text.split()]
@@ -368,6 +362,18 @@ def burst_from_xml(annotation_path: str, orbit_path: str, tiff_path: str,
 
         burst_id = f't{track_number}_{subswath_id.lower()}_b{id_burst}'
 
+        sensing_start += datetime.timedelta(seconds=first_valid_line * azimuth_time_interval)
+
+        # get orbit from state vector list/element tree
+        sensing_duration = datetime.timedelta(
+            seconds=(last_line - first_valid_line + 1) * azimuth_time_interval)
+        orbit = get_burst_orbit(sensing_start, sensing_start + sensing_duration,
+                                osv_list)
+
+        starting_range += first_valid_sample * range_pxl_spacing
+
+        n_lines = last_line - first_valid_line + 1
+        n_samples = last_sample - first_valid_sample + 1
         bursts[i] = Sentinel1BurstSlc(sensing_start, radar_freq, wavelength,
                                       azimuth_steer_rate, azimuth_time_interval,
                                       slant_range_time, starting_range,
