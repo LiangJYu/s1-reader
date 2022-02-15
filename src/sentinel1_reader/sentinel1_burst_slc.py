@@ -228,26 +228,23 @@ class Sentinel1BurstSlc:
         out_path : string
             Path of output GTiff file.
         '''
-        # get output directory of out_path
-        dst_dir, _ = os.path.split(out_path)
+        in_filename = self.tiff_path
 
-        # create VRT; make temporary if output not VRT
-        if fmt != 'VRT':
-            temp_vrt = tempfile.NamedTemporaryFile(dir=dst_dir)
-            vrt_fname = temp_vrt.name
-        else:
-            vrt_fname = out_path
-        self.slc_to_vrt_file(vrt_fname)
+        ds = gdal.Open(in_filename, gdal.GA_ReadOnly)
+        slc = ds.GetRasterBand(1).ReadAsArray()
+        ds = None
 
-        if fmt == 'VRT':
-            return
+        slc_arr = slc[self.first_valid_line:self.last_valid_line + 1,
+                      self.first_valid_sample:self.last_valid_sample + 1]
 
-        # open temporary VRT and translate to GTiff
-        src_ds = gdal.Open(vrt_fname)
-        gdal.Translate(out_path, src_ds, format=fmt)
-
-        # clean up
-        src_ds = None
+        # Save the extracted burst
+        driver = gdal.GetDriverByName('GTiff')
+        ds = driver.Create(out_path, slc_arr.shape[1], slc_arr.shape[0], 1,
+                           gdal.GDT_CFloat32)
+        outband = ds.GetRasterBand(1)
+        outband.WriteArray(slc_arr)
+        outband.FlushCache()
+        ds = None
 
 
     def slc_to_vrt_file(self, out_path):
